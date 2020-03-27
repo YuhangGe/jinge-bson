@@ -6,55 +6,57 @@ BSON 的基本构成为“元素（element，简写为 el）”，元素可以�
 
 接下来，我们按类型介绍所有的 BSON 元素。
 
-## 布尔元素（boolean）
+## 微小元素（micro）
 
 元素头：
 
 ````bnf
 el_type ::= 0
-el_tag ::= [3] [1]bool_value   // 只用到第一个 bit，代表布尔元素的值
-bool_value ::= 0            // False
-            |  1            // True
+el_tag ::= [2]small_value [2]small_type
+small_type ::= 0 | 1 | 2 | 3  // 0 代表布尔类型，1 代表空类型，2 代表正的小整数，3代表负的小整数
+small_value ::= 0 | 1 | 2 | 3
 ````
+
+其中：
+
+* 当 `small_type` 为 0 时代表布尔类型，`small_value = 0` 代表 False，`small_value = 1` 代表 True；
+* 当 `small_type` 为 1 时代表空类型，`small_value = 0` 代表 Undefined，`small_value = 1` 代表 Null；
+* 当 `small_type` 为 2 时代表正的小整数，`small_value` 就代表整数值。
+* 当 `small_type` 为 3 时代表负的小整数，`small_value` 就代表负数的绝对值。
+
 
 该类型没有元素内容。
 
-## 小整数元素（micro\_integer）
-
-元素头：
-
-````bnf
-el_type := 1
-el_tag  := value       // 用 4 个 bits 代表 0 ~ 15 的数值。
-````
-
-该类型没有元素内容。
 
 ## 整数元素（integer）
 
 元素头：
 
 ````bnf
-el_type := 2
-el_tag := [1] [2]int_size [1]int_negative 
-int_size := 0 | 1 | 2 | 3        // 两个 bits 组成的 0 ~ 3 代表该整数的 bytes 长度（1 ~ 4 位）。
+el_type := 1
+el_tag := [3]int_size [1]int_negative 
+int_size := 0 | 1 | 2 | 3 | 7
 int_negative := 0 | 1             // 是否是负数，0 代表正数，1 代表负数。
 ````
 
 元素内容：
 
-el\_tag 里 int\_size 数量的 bytes，填充该元素的值的**绝对值** 的  unsigned-big-endian 格式的数据。注意，负数也要先转成绝对值后再存储。
+el\_tag 里 `int\_size + 1` 个 bytes，填充该元素的值的**绝对值** 的  unsigned-big-endian 格式的数据。注意，负数也要先转成绝对值后再存储。
+
+`int_size` 可以是 0, 1, 2, 3, 7，但不支持 4, 5, 6。因为如果要支持 40, 48, 56 这三种位数的整数，需要自己实现序列化（而 8, 16, 32, 64 都是 js 语言原生支持的），但超过 32 位整数的情况很少，因此不需要为了节省空间引入太过于复杂的处理。`int_size` 可以是 2，即支持 24 bits 的整数，是因为这一类的整数出现的可能性比较大，值得额外处理以节省空间。
 
 `补充：`
 
 当整数的长度为 3 个 bytes 时，实际代表 4 个 bytes 里最左边的 byte 为 0。因此需要使用 big-endian 格式来存储整数。本文档所有存储整数时都按这个约定执行，不再赘述。
+
+
 
 ## 浮点数元素（float）
 
 元素头：
 
 ````bnf
-el_type := 3
+el_type := 2
 el_tag := [3] [1]float_long 
 float_long := 0 | 1             // 1 代表是 4 个 bytes 的 double 型浮点数，0 代表是 2 个 bytes 的 float 型浮点数。
 ````
@@ -68,30 +70,21 @@ el\_tag 里 float\_long 指定数量的 bytes，填充该元素的值的  big-en
 元素头：
 
 ````bnf
-el_type := 4
-el_tag := [1] [2]str_len_idx_size [1]str_in_dict 
-str_in_dict := 0 | 1             // 0 代表普通字符串，1 代表是在字典表里的字符串
+el_type := 3
+el_tag := [2]str_len_idx_size [2]str_type 
+str_in_dict := 0 | 1 | 2             // 0 代表普通字符串，1 代表是在字典表里的字符串，2 代表微型字符串，3 代表空字符串
 str_len_idx_size := 0 | 1 | 2 | 3
 ````
 
 元素内容：
 
-当 `str_in_dict = 0` 的时候，`str_len_idx_size` 代表字符串的长度对应整数的 bytes 大小。元素内容前 `str_len_idx_size` 个 bytes 为字符串长度，紧接着是由该长度指定的 utf-8 编码的字符串 bytes 流。
+当 `str_type = 0` 的时候，`str_len_idx_size` 代表字符串的长度对应整数的 bytes 大小。元素内容前 `str_len_idx_size + 1` 个 bytes 为字符串长度，紧接着是由该长度指定的 utf-8 编码的字符串 bytes 流。
 
-当 `str_in_dict = 1` 的时候，`str_len_idx_size` 代表字符串在字典里的索引对应整数的 bytes 大小。元素内容即这个索引对应整数的 bytes 数据。
+当 `str_type = 1` 的时候，`str_len_idx_size + 1` 代表字符串在字典里的索引对应整数的 bytes 大小。元素内容即这个索引对应整数的 bytes 数据。
 
+当 `str_type = 2` 的时候，`str_len_idx_size` 代表字符串的长度（1 - 4）。元素内容是这么长的字符串的 utf-8 编码流。
 
-## 空元素（empty）
-
-元素头：
-
-````bnf
-el_type := 5
-el_tag := [3] [1]empty_type 
-empty_type := 0 | 1 // 0 代表 null，1 代表 undefined
-````
-
-该元素没有元素内容。
+当 `str_type = 3` 的时候，代表空字符串。此时该元素没有元素内容。
 
 
 ## 数组元素（array）
@@ -99,7 +92,7 @@ empty_type := 0 | 1 // 0 代表 null，1 代表 undefined
 元素头：
 
 ````bnf
-el_type := 6
+el_type := 4
 el_tag :=  [1]array_is_same [2]array_len_size [1]array_is_micro
 array_is_same := 0 | 1    // 数组里面的元素是否全部是相同的类型
 array_is_micro := 0 | 1    // 是否是迷你数组
@@ -127,22 +120,22 @@ array_len_size := 0 | 1 | 2 | 3 // 数组的长度对应的整数的大小 - 1
 元素头：
 
 ````bnf
-el_type := 7
+el_type := 5
 el_tag := [1] [2]obj_prop_size [1]obj_is_micro 
 ````
 
 元素内容：
 
-当 `obj_is_micro ` 为 `1` 时，代表迷你对象，`el_tag` 的左边 3 个 bits 构成的整数（0～7）代表对象的属性（property）的个数（1～8）。这时候，元素内容为相应个数的连续 property value 组合，其中，property 是字符串元素，value 是除字典表外的任意 BSON 元素。
+当 `obj_is_micro ` 为 `1` 时，代表迷你对象，`el_tag` 的左边 3 个 bits 构成的整数（0～7）代表对象的属性（property）的个数。这时候，元素内容为相应个数的连续 property value 组合，其中，property 是字符串元素，value 是除字典表外的任意 BSON 元素。如果属性个数为 0，说明 是空对象。
 
-当 `obj_is_micro` 为 `0` 时，元素内容的前 `obj_prop_size` 个 bytes 是对象的属性数量对应的整数的大小。在这之后，是连续的 property value 组合，总的个数由前面读到的数据指定。
+当 `obj_is_micro` 为 `0` 时，元素内容的前 `obj_prop_size + 1` 个 bytes 是对象的属性数量对应的整数的大小。在这之后，是连续的 property value 组合，总的个数由前面读到的数据指定。
 
 ## 字典表（dict）
 
 元素头：
 
 ````bnf
-el_type := 8
+el_type := 6
 el_tag := [1] [2]dict_size [1]dict_is_micro
 dict_is_micro := 0 | 1    // 是否是迷你字典表
 dict_size := 0 | 1 | 2 | 3 // 字典表的元素数量的
@@ -150,11 +143,13 @@ dict_size := 0 | 1 | 2 | 3 // 字典表的元素数量的
 
 元素内容：
 
-当 `dict_is_micro` 为 `1` 时，代表迷你字典表，`el_tag` 的左边 3 个 bits 构成的整数（0～7）代表字典表里面字符串的个数（1～8）。这时候，元素内容为相应个数的字符串元素。
+当 `dict_is_micro` 为 `1` 时，代表迷你字典表，`el_tag` 的左边 3 个 bits 构成的整数（0～7）代表字典表里面字符串的个数（1～8）。这时候，元素内容为相应个数的字典项。
 
-当 `dict_is_micro` 为 `0` 时，元素内容的前 `dict_size` 个 bytes 是字典表里面字符串个数以 big-endian 格式写入的数据。在这之后，是连续的字符串元素，总的个数由前面读到的数据指定。
+当 `dict_is_micro` 为 `0` 时，元素内容的前 `dict_size + 1` 个 bytes 是字典表里面字符串个数的数据。在这之后，是连续的字典项，总的个数由前面读到的数据指定。
 
-字典表里面的字符串，必须按从小到到的顺序排列。
+字典项：
+
+字典项是一种简化类型的字符串。其第一个 byte 的左边第一个 bit 代表字符串长度是 7 个 bits 还是 15 个 bits，如果是 15 个则接下来的一个 byte 也一起读取，获得字符串长度。然后读取这个长度的 bytes 流。
 
 `补充：`
 
