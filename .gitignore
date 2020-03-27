@@ -1,0 +1,10 @@
+node_modules
+/.tmp
+/.vscode
+/.idea
+**/.DS_Store
+.jshintignore
+.jshintrc
+dump.rdb
+/lib
+/dist

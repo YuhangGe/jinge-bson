@@ -1,0 +1,38 @@
+{
+  "name": "jinge-bson",
+  "version": "0.0.1",
+  "description": "binary json for https://jinge.design",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint './src/**/*.ts'",
+    "validate": "npm ls"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jinge-design/bson.git"
+  },
+  "keywords": [
+    "jinge",
+    "bson"
+  ],
+  "author": "YuhangGe <abeyuhang@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jinge-design/bson/issues"
+  },
+  "homepage": "https://github.com/jinge-design/bson#readme",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/eslint": "^6.1.8",
+    "@typescript-eslint/eslint-plugin": "^2.25.0",
+    "@typescript-eslint/parser": "^2.25.0",
+    "eslint": "^6.8.0",
+    "precommit-hook": "^3.0.0",
+    "source-map-support": "^0.5.16",
+    "typescript": "^3.8.3"
+  },
+  "pre-commit": [
+    "lint"
+  ]
+}
