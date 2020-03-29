@@ -32,23 +32,33 @@ export function writeUint64(ctx: Context, v: number): void {
   ctx.o += 8;
 }
 
+export function writeFloat32(ctx: Context, v: number): void {
+  prepareArrayBuffer(ctx, 4);
+  ctx.v.setFloat32(ctx.o, v, false);
+  ctx.o += 4;
+}
+
+export function writeFloat64(ctx: Context, v: number): void {
+  prepareArrayBuffer(ctx, 8);
+  ctx.v.setFloat64(ctx.o, v, false);
+  ctx.o += 8;
+}
+
 export function writeElementHead(ctx: Context, type: number, tag: number): void {
   writeUint8(ctx, ((type & 0x0f) << 4) | (tag & 0x0f));
 }
 
 export function writeMicro(ctx: Context, type: number, value: number): void {
-  const tag = type << 2 | value;
+  const tag = value << 2 | type;
   writeElementHead(ctx, 0, tag);
 }
 
 export function writeFloat(ctx: Context, v: number, useDoubleFloatPrecision: boolean): void {
   writeElementHead(ctx, 2, useDoubleFloatPrecision ? 1 : 0);
   if (useDoubleFloatPrecision) {
-    ctx.v.setFloat64(ctx.o, v, false);
-    ctx.o += 8;
+    writeFloat64(ctx, v);
   } else {
-    ctx.v.setFloat32(ctx.o, v, false);
-    ctx.o += 4;
+    writeFloat32(ctx, v);
   }
 }
 
@@ -64,7 +74,7 @@ export function writeIntegerBody(ctx: Context, v: number, size: number): void {
   } else if (size === 1) {
     writeUint8(ctx, v);
   } else {
-    throw new Error('unsupport size of integer.');
+    throw new Error('unsupport size of integer');
   }
 }
 
@@ -96,7 +106,7 @@ export function writeString(ctx: Context, v: string): void {
     return writeElementHead(ctx, 3, 3);
   }
   const s = ctx.d.get(v);
-  if (!s)  throw new Error('string not found!');
+  if (!s)  throw new Error('string not found');
   if (s.b.byteLength > 1 && s.i >= 0) {
     const indexSize = getByteSizeOfInteger(s.i);
     writeElementHead(ctx, 3, ((indexSize - 1) << 2) | 1);
@@ -107,8 +117,8 @@ export function writeString(ctx: Context, v: string): void {
     writeElementHead(ctx, 3, ((s.b.byteLength - 1) << 2) | 2);
   } else {
     const lengthSize = getByteSizeOfInteger(s.b.byteLength);
-    writeElementHead(ctx, 3, (lengthSize << 2) | 0);
-    writeIntegerBody(ctx, lengthSize, lengthSize);
+    writeElementHead(ctx, 3, ((lengthSize - 1) << 2) | 0);
+    writeIntegerBody(ctx, s.b.byteLength, lengthSize);
   }
   writeStringBody(ctx, s);
 }
@@ -117,7 +127,10 @@ export function writeObject(ctx: Context, v: Record<string, unknown>, useDoubleF
   const props = Object.keys(v);
   const len = props.length;
   const size = getByteSizeOfInteger(len);
-  if (size >= 4) throw new Error('too huge object.');
+  // if (size >= 4) {
+  //   似乎没有必要 assert，现实中不可能出现超过 40 亿属性的 object.
+  //   throw new Error('too huge object.');
+  // }
 
   const tag = len <= 7 ? (
     (len << 1) | 1
@@ -125,6 +138,9 @@ export function writeObject(ctx: Context, v: Record<string, unknown>, useDoubleF
     ((size - 1) << 1) | 0
   );
   writeElementHead(ctx, 5, tag);
+  if (len > 7) {
+    writeIntegerBody(ctx, len, size);
+  }
   props.forEach(prop => {
     writeString(ctx, prop);
     const pv = v[prop];
@@ -147,7 +163,7 @@ export function writeArray(ctx: Context, v: unknown[], useDoubleFloatPrecision: 
   if (!isMicro) {
     writeIntegerBody(ctx, len, size);
   }
-  if (!isSame) {
+  if (!isSame || v.length <= 1) {
     v.forEach(item => {
       loopWriteFn(ctx, item, useDoubleFloatPrecision);
     });
@@ -208,6 +224,8 @@ export function loopWrite(ctx: Context, v: unknown, useDoubleFloatPrecision: boo
     case 'object':
       if (v === null) {
         writeMicro(ctx, 1, 1);
+      } else if (v instanceof Boolean) {
+        writeMicro(ctx, 0, v.valueOf() ? 1 : 0);
       } else if (Array.isArray(v)) {
         writeArray(ctx, v, useDoubleFloatPrecision, loopWrite);
       } else {
@@ -215,6 +233,6 @@ export function loopWrite(ctx: Context, v: unknown, useDoubleFloatPrecision: boo
       }
       break;
     default:
-      throw new Error('unsupport value type:' + type);
+      throw new Error('unsupport value type: ' + type);
   }
 }

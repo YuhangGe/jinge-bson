@@ -15,17 +15,19 @@ export function prepareDictionary(ctx: Context, data: unknown): void {
     let v = map.get(s);
     if (!v) {
       const arr = (new TextEncoder()).encode(s);
-      if (arr.length > 32767) {
-        // 当前版本的字符串，不能超过 32767 长度。
-        throw new Error('Do not support string byteLength greater than 32767');
-      }
       v = {
         b: arr,
-        c: 1,
+        /**
+         * 如果 byteLength = 1，则不需要写如字典表，否则反而多占用一个 byte 的空间。
+         * 如果 byteLength > 32767(即 15bits)，也不放入字典表，字典表使用的是更节省空间的方式存的字符串。
+         */
+        c: arr.length > 1 && arr.length <= 32767 ? 1 : 0,
         i: -1
       };
       map.set(s, v);
     } else if (v.c > 0) {
+      // 只有 byteLength 在 (1 ~ 32767] 之间的字符串，才递增其出现的总次数。
+      // 总次数用于接下来的过滤逻辑，只有总次数 >= 2 的字符串才有必要存在字典表里。
       v.c++;
     }
   }
@@ -38,7 +40,7 @@ export function prepareDictionary(ctx: Context, data: unknown): void {
       }
       return;
     }
-    if (type !== 'object' || type === null) {
+    if (type !== 'object' || v === null) {
       return;
     }
     if (Array.isArray(v)) {
@@ -58,9 +60,8 @@ export function prepareDictionary(ctx: Context, data: unknown): void {
   }
 
   const entries = [...ctx.d.values()].filter(entry => {
-    // 只有 bytes 长度大于 1，且出现次数超过 1 次的字符串才有放到字典表里的意义，
-    // 否则放到全局字典表里反而会占用额外大小。
-    return entry.b.byteLength > 1 && entry.c > 1;
+    // 只有 byteLength 长度大于 1 且小于等于 32767，且出现次数超过 1 次的字符串才有放到字典表里。
+    return entry.c > 1;
   }).sort((a, b) => {
     // 按出现频率的倒序排列，这样在字典里的索引大小最小。
     return a.c === b.c ? 0 : (
@@ -72,9 +73,10 @@ export function prepareDictionary(ctx: Context, data: unknown): void {
   }
   const isMicro = entries.length <= 4 ? 1 : 0;
   const size = getByteSizeOfInteger(entries.length);
-  if (size > 4) {
-    throw new Error('too huge dictionary.');
-  }
+  // if (size > 4) {
+  //   似乎没有必要进行 assert，超过 40 亿的字典不大可能在现实情况里出现。
+  //   throw new Error('too huge dictionary');
+  // }
   const tag = isMicro ? (
     ((entries.length - 1) << 1) | 1
   ) : (
@@ -90,7 +92,7 @@ export function prepareDictionary(ctx: Context, data: unknown): void {
     if (bLen > 127) {
       writeUint16(ctx, (1 << 15) | bLen);
     } else {
-      writeUint8(ctx, (1 << 7) | bLen);
+      writeUint8(ctx, (0 << 7) | bLen);
     }
     writeStringBody(ctx, entry);
   });

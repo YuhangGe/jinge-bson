@@ -13,9 +13,11 @@ export type Dict = {
   i: number;
 };
 
-export const BUFFER_PAGE_SIZE = 1024;
-
 export class Context {
+  /**
+   * buffer page size
+   */
+  p: number;
   /**
    * global string dictionary
    */
@@ -29,9 +31,10 @@ export class Context {
    */
   o: number;
 
-  constructor() {
+  constructor(bufferPageSize: number) {
+    this.p = bufferPageSize;
     this.d = null;
-    this.v = new DataView(new ArrayBuffer(BUFFER_PAGE_SIZE));
+    this.v = new DataView(new ArrayBuffer(bufferPageSize));
     this.o = 0;
   }
 }
@@ -42,7 +45,7 @@ declare global {
   }
 }
 
-function transferArrayBuffer(source: ArrayBuffer, length: number): ArrayBuffer {
+export function transferArrayBuffer(source: ArrayBuffer, length: number): ArrayBuffer {
   if (ArrayBuffer.transfer) {
     return ArrayBuffer.transfer(source, length);
   }
@@ -60,7 +63,7 @@ export function prepareArrayBuffer(ctx: Context, size: number): void {
   if (length <= ctx.v.byteLength) {
     return;
   }
-  length = ((length / BUFFER_PAGE_SIZE | 0) + 1) * BUFFER_PAGE_SIZE;
+  length = ((length / ctx.p | 0) + 1) * ctx.p;
   ctx.v = new DataView(transferArrayBuffer(ctx.v.buffer, length));
 }
 
@@ -74,9 +77,12 @@ export function getByteSizeOfInteger(v: number | bigint): number {
 
 export function getType(v: unknown): string {
   const type = typeof v;
-  if (v === 'object') {
+  if (type === 'object') {
     if (v === null) return 'null';
+    else if (v instanceof Boolean) return 'BOOL';
     else if (Array.isArray(v)) return 'array';
+  } else if (type === 'number') {
+    return Number.isInteger(v as number) ? 'integer' : 'float';
   }
   return type;
 }
@@ -91,7 +97,7 @@ export function getType(v: unknown): string {
  */
 export function isArrayItemsSame(v: unknown[]): boolean {
   if (v.length <= 1) {
-    return false;
+    return true;
   }
   let firstType: string;
   let firstObjSchema: Map<string, string>;
@@ -115,7 +121,7 @@ export function isArrayItemsSame(v: unknown[]): boolean {
       return false;
     }
     if (type !== 'object') {
-      return item === v[0];
+      return type === 'BOOL' ? item.valueOf() === v[0].valueOf() :  item === v[0];
     }
     return Object.keys(item).every(prop => {
       return firstObjSchema.get(prop) === getType((item as Record<string, unknown>)[prop]);

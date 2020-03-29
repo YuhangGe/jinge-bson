@@ -5,8 +5,9 @@
   "main": "index.js",
   "scripts": {
     "watch": "rm -rf ./lib && tsc -w",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint './src/**/*.ts'"
+    "test": "jest",
+    "coverage": "jest '--coverage'",
+    "lint": "eslint '**/*.ts'"
   },
   "repository": {
     "type": "git",
@@ -24,12 +25,17 @@
   "homepage": "https://github.com/jinge-design/bson#readme",
   "dependencies": {},
   "devDependencies": {
-    "@types/eslint": "^6.1.8",
-    "@typescript-eslint/eslint-plugin": "^2.25.0",
-    "@typescript-eslint/parser": "^2.25.0",
+    "@babel/core": "^7.9.0",
+    "@babel/preset-env": "^7.9.0",
+    "@babel/preset-typescript": "^7.9.0",
+    "@types/eslint": "^6.1.9",
+    "@types/jest": "^25.1.4",
+    "@typescript-eslint/eslint-plugin": "^2.26.0",
+    "@typescript-eslint/parser": "^2.26.0",
+    "babel-jest": "^25.2.4",
     "eslint": "^6.8.0",
+    "jest": "^25.2.4",
     "precommit-hook": "^3.0.0",
-    "source-map-support": "^0.5.16",
     "typescript": "^3.8.3"
   },
   "pre-commit": [

@@ -2,10 +2,5 @@ node_modules
 /.tmp
 /.vscode
 /.idea
-**/.DS_Store
-.jshintignore
-.jshintrc
 /dist
-/asset
 /lib
-ecosystem.config.js

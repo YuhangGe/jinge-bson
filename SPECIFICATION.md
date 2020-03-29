@@ -58,7 +58,7 @@ el\_tag 里 `int\_size + 1` 个 bytes，填充该元素的值的**绝对值** �
 ````bnf
 el_type := 2
 el_tag := [3] [1]float_long 
-float_long := 0 | 1             // 1 代表是 4 个 bytes 的 double 型浮点数，0 代表是 2 个 bytes 的 float 型浮点数。
+float_long := 0 | 1             // 1 代表是 8 个 bytes 的 double 型浮点数，0 代表是 4 个 bytes 的 float 型浮点数。
 ````
 
 元素内容：
@@ -78,11 +78,11 @@ str_len_idx_size := 0 | 1 | 2 | 3
 
 元素内容：
 
-当 `str_type = 0` 的时候，`str_len_idx_size` 代表字符串的长度对应整数的 bytes 大小。元素内容前 `str_len_idx_size + 1` 个 bytes 为字符串长度，紧接着是由该长度指定的 utf-8 编码的字符串 bytes 流。
+当 `str_type = 0` 的时候，`str_len_idx_size + 1` 代表字符串的长度对应整数的 bytes 大小。元素内容前 `str_len_idx_size + 1` 个 bytes 为字符串长度，紧接着是由该长度指定的 utf-8 编码的字符串 bytes 流。
 
 当 `str_type = 1` 的时候，`str_len_idx_size + 1` 代表字符串在字典里的索引对应整数的 bytes 大小。元素内容即这个索引对应整数的 bytes 数据。
 
-当 `str_type = 2` 的时候，`str_len_idx_size` 代表字符串的长度（1 - 4）。元素内容是这么长的字符串的 utf-8 编码流。
+当 `str_type = 2` 的时候，`str_len_idx_size + 1` 代表字符串的长度（1 - 4）。元素内容是这么长的字符串的 utf-8 编码流。
 
 当 `str_type = 3` 的时候，代表空字符串。此时该元素没有元素内容。
 
@@ -136,16 +136,17 @@ el_tag := [1] [2]obj_prop_size [1]obj_is_micro
 
 ````bnf
 el_type := 6
-el_tag := [1] [2]dict_size [1]dict_is_micro
+el_tag := [1] [2]dict_len_size [1]dict_is_micro
+        | [3]dict_len [1]dict_is_micro
 dict_is_micro := 0 | 1    // 是否是迷你字典表
 dict_size := 0 | 1 | 2 | 3 // 字典表的元素数量的
 ````
 
 元素内容：
 
-当 `dict_is_micro` 为 `1` 时，代表迷你字典表，`el_tag` 的左边 3 个 bits 构成的整数（0～7）代表字典表里面字符串的个数（1～8）。这时候，元素内容为相应个数的字典项。
+当 `dict_is_micro` 为 `1` 时，代表迷你字典表，左边 3 个 bits `dict_len + 1` 代表字典表里面字符串的个数（1～8，字典项个数不可能为 0）。这时候，元素内容为相应个数的字典项。
 
-当 `dict_is_micro` 为 `0` 时，元素内容的前 `dict_size + 1` 个 bytes 是字典表里面字符串个数的数据。在这之后，是连续的字典项，总的个数由前面读到的数据指定。
+当 `dict_is_micro` 为 `0` 时，元素内容的前 `dict_len_size + 1` 个 bytes 是字典表里面字符串个数的数据。在这之后，是连续的字典项，总的个数由前面读到的数据指定。
 
 字典项：
 
