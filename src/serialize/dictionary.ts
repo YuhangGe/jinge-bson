@@ -2,8 +2,8 @@ import {
   Context, getByteSizeOfInteger
 } from './helper';
 import {
-  writeIntegerBody,
-  writeUint8, writeUint16
+  writeIntegerBody, writeElementHead,
+  writeUint8, writeUint16, writeStringBody
 } from './writer';
 
 export function prepareDictionary(ctx: Context, data: unknown): void {
@@ -32,24 +32,24 @@ export function prepareDictionary(ctx: Context, data: unknown): void {
   function loop(v: unknown): void {
     const type = typeof v;
     if (type === 'string') {
-      if (v.length > 0) {
+      if ((v as string).length > 0) {
         // 只有长度大于 0 的字符串，才需要加入字典表。
-        add(v);
+        add(v as string);
       }
       return;
     }
     if (type !== 'object' || type === null) {
       return;
     }
-    if (isArray(v)) {
+    if (Array.isArray(v)) {
       v.forEach(cv => loop(cv));
     } else {
-      for(const k in v) {
-        if (k.length > 0) {
-          add(k);
+      Object.keys(v).forEach(prop => {
+        if (prop.length > 0) {
+          add(prop);
         }
-        loop(v[k]);
-      }
+        loop((v as Record<string, unknown>)[prop]);
+      });
     }
   }
   loop(data);
@@ -88,9 +88,9 @@ export function prepareDictionary(ctx: Context, data: unknown): void {
     entry.i = idx;
     const bLen = entry.b.byteLength;
     if (bLen > 127) {
-      writeUint16((1 << 15) | bLen);
+      writeUint16(ctx, (1 << 15) | bLen);
     } else {
-      writeUint8((1 << 7) | bLen);
+      writeUint8(ctx, (1 << 7) | bLen);
     }
     writeStringBody(ctx, entry);
   });

@@ -8,9 +8,9 @@ import {
   loopWrite
 } from './writer';
 
-export function serialize(data: JSON): ArrayBuffer {
+export function serialize(data: unknown, useDoubleFloatPrecision: boolean = false): ArrayBuffer {
   const globalContext = new Context();
   prepareDictionary(globalContext, data);
-  loopWrite(globalContext, data);
-  return globalContext.view.buffer.slice(0, globalContext.offset);
+  loopWrite(globalContext, data, useDoubleFloatPrecision);
+  return globalContext.v.buffer.slice(0, globalContext.o);
 }

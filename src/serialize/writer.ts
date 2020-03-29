@@ -1,5 +1,5 @@
 import {
-  prepareArrayBuffer, Context, getByteSizeOfInteger, Dict
+  prepareArrayBuffer, Context, getByteSizeOfInteger, Dict, isArrayItemsSame, getType
 } from './helper';
 
 export function writeUint8(ctx: Context, v: number): void {
@@ -26,19 +26,30 @@ export function writeUint32(ctx: Context, v: number): void {
   ctx.o += 4;
 }
 
-export function writeUint64(ctx: Context, v: number | bigint): void {
+export function writeUint64(ctx: Context, v: number): void {
   prepareArrayBuffer(ctx, 8);
-  ctx.v.setUint64(ctx.o, v, false);
+  ctx.v.setBigUint64(ctx.o, BigInt(v), false);
   ctx.o += 8;
 }
 
 export function writeElementHead(ctx: Context, type: number, tag: number): void {
-  writeUInt8(ctx, ((type & 0x0f) << 4) | (tag & 0x0f));
+  writeUint8(ctx, ((type & 0x0f) << 4) | (tag & 0x0f));
 }
 
 export function writeMicro(ctx: Context, type: number, value: number): void {
   const tag = type << 2 | value;
   writeElementHead(ctx, 0, tag);
+}
+
+export function writeFloat(ctx: Context, v: number, useDoubleFloatPrecision: boolean): void {
+  writeElementHead(ctx, 2, useDoubleFloatPrecision ? 1 : 0);
+  if (useDoubleFloatPrecision) {
+    ctx.v.setFloat64(ctx.o, v, false);
+    ctx.o += 8;
+  } else {
+    ctx.v.setFloat32(ctx.o, v, false);
+    ctx.o += 4;
+  }
 }
 
 export function writeIntegerBody(ctx: Context, v: number, size: number): void {
@@ -63,12 +74,11 @@ export function writeInteger(ctx: Context, v: number | bigint): void {
     v = -v;
   }
   if (v <= 3) {
-    writeMicro(ctx, negative ? 3 : 2, v);
-    return;
+    return writeMicro(ctx, negative ? 3 : 2, v as number);
   }
   const size = getByteSizeOfInteger(v);
-  writeElementHead(ctx, 1, ((v - 1) << 1) | (negative ? 1 : 0));
-  writeIntegerBody(ctx, v, size);
+  writeElementHead(ctx, 1, ((size - 1) << 1) | (negative ? 1 : 0));
+  writeIntegerBody(ctx, v as number, size);
 }
 
 export function writeStringBody(ctx: Context, s: Dict): void {
@@ -103,7 +113,7 @@ export function writeString(ctx: Context, v: string): void {
   writeStringBody(ctx, s);
 }
 
-export function writeObject(ctx: Context, v: Record<string, unknown>, loopWriteFn: (ctx: Context, v: unknown) => void): void {
+export function writeObject(ctx: Context, v: Record<string, unknown>, useDoubleFloatPrecision: boolean, loopWriteFn: (ctx: Context, v: unknown, useDoubleFloatPrecision: boolean) => void): void {
   const props = Object.keys(v);
   const len = props.length;
   const size = getByteSizeOfInteger(len);
@@ -118,15 +128,56 @@ export function writeObject(ctx: Context, v: Record<string, unknown>, loopWriteF
   props.forEach(prop => {
     writeString(ctx, prop);
     const pv = v[prop];
-    loopWriteFn(ctx, pv);
+    loopWriteFn(ctx, pv, useDoubleFloatPrecision);
   });
 }
 
-export function writeArray(ctx: Context, v: Array, loopWriteFn: (ctx: Context, v: unknown) => void): void {
-
+export function writeArray(ctx: Context, v: unknown[], useDoubleFloatPrecision: boolean, loopWriteFn: (ctx: Context, v: unknown, useDoubleFloatPrecision: boolean) => void): void {
+  const len = v.length;
+  if (len === 0) {
+    return writeElementHead(ctx, 4, 1);
+  }
+  const isMicro = len <= 3;
+  const isSame = isArrayItemsSame(v);
+  const size = getByteSizeOfInteger(len);
+  const tag = ((isSame ? 1 : 0) << 3) | (
+    isMicro ? (len << 1) : ((size - 1) << 1)
+  ) | (isMicro ? 1 : 0);
+  writeElementHead(ctx, 4, tag);
+  if (!isMicro) {
+    writeIntegerBody(ctx, len, size);
+  }
+  if (!isSame) {
+    v.forEach(item => {
+      loopWriteFn(ctx, item, useDoubleFloatPrecision);
+    });
+    return;
+  }
+  loopWriteFn(ctx, v[0], useDoubleFloatPrecision);
+  const firstType = getType(v[0]);
+  if (firstType !== 'object') {
+    /**
+     * 数组的所有项目有相同的类型（不包括 object 和 array）和值。
+     * 因此，只要存储数组的第一个项目就够了，后面的都可以忽略。通过第一个项目和数组的长度，就可以还原数组。
+     */
+    return;
+  }
+  /**
+   * 数组的所有项目都是有【完全一致】的属性的 object，因此，第一个项目需要存储属性，
+   * 以后的项目都可以直接按属性排序后的顺序存储属性值。【完全一致】的概念参看 isArrayItemsSame 函数注释。
+   * 
+   * 这个策略用于高度压缩诸如 [{x: 10, y: 20}, {x: 30, y: 40}] 这样的点阵数组。
+   */
+  const props = Object.keys(v[0]).sort();
+  v.forEach((item, i) => {
+    if (i === 0) return;
+    props.forEach(prop => {
+      loopWriteFn(ctx, (item as Record<string, unknown>)[prop], useDoubleFloatPrecision);
+    });
+  });
 }
 
-export function loopWrite(ctx: Context, v: unknown): void {
+export function loopWrite(ctx: Context, v: unknown, useDoubleFloatPrecision: boolean): void {
   const type = typeof v;
   switch(type) {
     case 'undefined':
@@ -136,32 +187,34 @@ export function loopWrite(ctx: Context, v: unknown): void {
       writeMicro(ctx, 0, v ? 1 : 0);
       break;
     case 'string':
-      writeString(ctx, v);
+      writeString(ctx, v as string);
       break;
     case 'bigint':
-      writeInteger(ctx, v);
+      writeInteger(ctx, v as bigint);
       break;
     case 'number':
-      if (Number.isNaN(v) || !Number.isFinite(v)) {
+      if (Number.isNaN(v as number) || !Number.isFinite(v as number)) {
         throw new Error('do not support NaN or Infinity');
       }
-      if (Number.isInteger(v)) {
-        writeInteger(ctx, v);
+      if (Number.isInteger(v as number)) {
+        if (!Number.isSafeInteger(v as number)) {
+          throw new Error('integer is not safe, use bigint instead.');
+        }
+        writeInteger(ctx, v as number);
       } else {
-        // TODO: support float
+        writeFloat(ctx, v as number, useDoubleFloatPrecision);
       }
       break;
     case 'object':
       if (v === null) {
         writeMicro(ctx, 1, 1);
       } else if (Array.isArray(v)) {
-        writeArray(ctx, v, loopWrite);
+        writeArray(ctx, v, useDoubleFloatPrecision, loopWrite);
       } else {
-        writeObject(ctx, v, loopWrite);
+        writeObject(ctx, v as Record<string, unknown>, useDoubleFloatPrecision, loopWrite);
       }
       break;
     default:
       throw new Error('unsupport value type:' + type);
-      break;
   }
 }

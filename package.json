@@ -4,9 +4,9 @@
   "description": "binary json for https://jinge.design",
   "main": "index.js",
   "scripts": {
+    "watch": "rm -rf ./lib && tsc -w",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint './src/**/*.ts'",
-    "validate": "npm ls"
+    "lint": "eslint './src/**/*.ts'"
   },
   "repository": {
     "type": "git",

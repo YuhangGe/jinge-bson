@@ -3,7 +3,7 @@
     "module": "esnext",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "target": "es2019",
+    "target": "esnext",
     "noImplicitAny": true,
     "noImplicitReturns": true,
     "alwaysStrict": true,
