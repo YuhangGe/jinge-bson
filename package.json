@@ -2,7 +2,8 @@
   "name": "jinge-bson",
   "version": "0.0.1",
   "description": "binary json for https://jinge.design",
-  "main": "index.js",
+  "main": "lib/index.js",
+  "types": "types/index.d.ts",
   "scripts": {
     "watch": "rm -rf ./lib && tsc -w",
     "test": "jest",

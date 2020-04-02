@@ -1,0 +1,10 @@
+import { Context } from './helper';
+export declare const readIntegerFns: ((v: DataView, o: number) => number)[];
+export declare function parseDictionary(ctx: Context, tag: number): void;
+export declare function parseMicro(ctx: Context, tag: number): number | boolean | null | undefined;
+export declare function parseInteger(ctx: Context, tag: number): number | bigint;
+export declare function parseFloat(ctx: Context, tag: number): number;
+export declare function parseString(ctx: Context, tag: number): string;
+export declare function parseArray(ctx: Context, tag: number, loopParseFn: (ctx: Context) => unknown): unknown[];
+export declare function parseObject(ctx: Context, tag: number, loopParseFn: (ctx: Context) => unknown): Record<string, unknown>;
+export declare function loopParse(ctx: Context): unknown;
