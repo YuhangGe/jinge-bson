@@ -12,7 +12,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jinge-design/bson.git"
+    "url": "git+https://github.com/jinge-design/jinge-bson.git"
   },
   "keywords": [
     "jinge",
@@ -20,10 +20,6 @@
   ],
   "author": "YuhangGe <abeyuhang@gmail.com>",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/jinge-design/bson/issues"
-  },
-  "homepage": "https://github.com/jinge-design/bson#readme",
   "dependencies": {},
   "devDependencies": {
     "@babel/core": "^7.9.0",
